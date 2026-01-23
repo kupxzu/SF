@@ -14,14 +14,40 @@ class PetController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $pets = Pet::with('client')
-            ->latest()
-            ->paginate(15);
+        $query = Pet::with('client');
+
+        // Search filter
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('petname', 'like', "%{$search}%")
+                  ->orWhere('breed', 'like', "%{$search}%")
+                  ->orWhere('colormarkings', 'like', "%{$search}%")
+                  ->orWhereHas('client', function ($q) use ($search) {
+                      $q->where('fullname', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Date range filter
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        $pets = $query->latest()->paginate(15)->withQueryString();
 
         return Inertia::render('admin/Pets/Index', [
             'pets' => $pets,
+            'filters' => [
+                'search' => $request->search ?? '',
+                'date_from' => $request->date_from ?? '',
+                'date_to' => $request->date_to ?? '',
+            ],
         ]);
     }
 
